@@ -41,3 +41,4 @@ htmlcov/
 # OS specific
 .DS_Store
 Thumbs.db
+/export.json
