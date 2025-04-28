@@ -12,6 +12,10 @@ NIGHT_START = 18
 SLEEP_ERR = 10 * 60 # 10 mins in seconds
 BOTTLE_ERR = 15 # ml
 
+# Day of week ordering (for consistent display)
+DOW_ORDER = [3, 1, 5, 6, 4, 0, 2]  # Monday first, Sunday last
+
+
 
 def ensure_datetime(df, date_columns):
     """Convert specified columns to datetime format.
@@ -82,175 +86,168 @@ def add_error_columns(df, columns, error_value, count_suffix="_count"):
     return df
 
 
+def group_and_sum_by_day(df, date_column, sum_columns, error_value):
+    """Group a DataFrame by day and sum specified columns.
 
-def group_and_sum_by_day(df, date_column, sum_columns, err):
-    """
-    Group a DataFrame by day and sum specified columns.
-
-    Parameters:
-    df (pd.DataFrame): The input DataFrame
-    date_column (str): Name of the column containing dates
-    sum_columns (list): List of column names to sum
+    Args:
+        df (pd.DataFrame): The input DataFrame
+        date_column (str): Name of the column containing dates
+        sum_columns (list): List of column names to sum
+        error_value (float): Error value for uncertainty calculation
 
     Returns:
-    pd.DataFrame: A new DataFrame grouped by day with summed columns
+        pd.DataFrame: A new DataFrame grouped by day with summed columns
     """
-    # Ensure the date column is in datetime format
-    df.loc[:,date_column] = pd.to_datetime(df.loc[:,date_column])
+    df = ensure_datetime(df, date_column)
 
-    functions = ['sum', 'count']
-    agg_dict = {}
-    for param in sum_columns:
-        for func in functions:
-            agg_dict[f"{param}_{func}"] = (param, func)
+    # Create aggregation dictionary
+    agg_dict = create_aggregation_dict(sum_columns, ['sum', 'count'])
 
     # Group by date (ignoring time) and sum specified columns
     grouped_df = df.groupby(df[date_column].dt.date)[sum_columns].agg(**agg_dict).reset_index()
-    for param in sum_columns:
-        grouped_df[f"{param}_err"] = err * grouped_df[f"{param}_count"].pow(1./2.)
+
+    # Add error columns
+    grouped_df = add_error_columns(grouped_df, sum_columns, error_value)
 
     return grouped_df
 
 
-def group_and_sum_durations_by_day(df, date_columns, err):
-    """
-    Group a DataFrame by day and sum specified columns.
+def group_and_sum_durations_by_day(df, date_columns, error_value):
+    """Group a DataFrame by day and sum duration between two date columns.
 
-    Parameters:
-    df (pd.DataFrame): The input DataFrame
-    date_column (list): Name of the column containing dates start and end
+    Args:
+        df (pd.DataFrame): The input DataFrame
+        date_columns (list): Names of columns containing start and end dates
+        error_value (float): Error value for uncertainty calculation
 
     Returns:
-    pd.DataFrame: A new DataFrame grouped by day with summed columns
+        pd.DataFrame: A new DataFrame grouped by day with summed durations
     """
-    # Ensure the date column is in datetime format
-    for date_col in date_columns:
-        df.loc[:,date_col] = pd.to_datetime(df.loc[:,date_col])
+    df = ensure_datetime(df, date_columns)
 
-    df.loc[:,'event_duration'] = (df.loc[:,date_columns[1]] - df.loc[:,date_columns[0]]).dt.total_seconds()
+    # Calculate duration in seconds
+    df.loc[:, 'event_duration'] = (df.loc[:, date_columns[1]] - df.loc[:, date_columns[0]]).dt.total_seconds()
 
-    functions = ['sum', 'count']
-    agg_dict = {}
-    for func in functions:
-        agg_dict[f"event_duration_{func}"] = ("event_duration", func)
+    # Create aggregation dictionary
+    agg_dict = create_aggregation_dict(['event_duration'], ['sum', 'count'])
 
-    # Group by date (ignoring time) and sum specified columns
+    # Group by date and aggregate
     grouped_df = df.groupby(df[date_columns[0]].dt.date)[['event_duration']].agg(**agg_dict).reset_index()
-    grouped_df["event_duration_sum_err"] = err * grouped_df["event_duration_count"].pow(1./2.)
+
+    # Add error column
+    grouped_df["event_duration_sum_err"] = error_value * grouped_df["event_duration_count"].pow(1. / 2.)
 
     return grouped_df
 
 
-def group_and_mean_by_day_of_week(df, date_column, mean_columns, err):
-    """
-    Group a DataFrame by day and mean specified columns.
+def group_by_day_of_week(df, date_column, target_columns, error_value, agg_functions, reorder=True):
+    """Group a DataFrame by day of week with flexible aggregation.
 
-    Parameters:
-    df (pd.DataFrame): The input DataFrame
-    date_column (str): Name of the column containing dates
-    sum_columns (list): List of column names to sum
+    Args:
+        df (pd.DataFrame): The input DataFrame
+        date_column (str): Name of the column containing dates
+        target_columns (list): List of column names to aggregate
+        error_value (float): Error value for uncertainty calculation
+        agg_functions (list): List of aggregation functions to apply
+        reorder (bool): Whether to reorder days of week (Monday first)
 
     Returns:
-    pd.DataFrame: A new DataFrame grouped by day with summed columns
+        pd.DataFrame: A new DataFrame grouped by day of week
     """
-    # Ensure the date column is in datetime format
-    df.loc[:,date_column] = pd.to_datetime(df.loc[:,date_column])
-    day_of_week = add_day_of_week(df, date_column)
+    df = ensure_datetime(df, date_column)
+    df = add_day_of_week(df, date_column)
 
-    functions = ['mean', 'std', 'count']
-    agg_dict = {}
-    for param in mean_columns:
-        for func in functions:
-            agg_dict[f"{param}_{func}"] = (param, func)
+    # Create aggregation dictionary
+    agg_dict = create_aggregation_dict(target_columns, agg_functions)
 
-    # Group by day of week and mean specified columns
-    grouped_df = df.groupby(day_of_week['day_of_week'])[mean_columns].agg(**agg_dict).reset_index()
+    # Group by day of week and aggregate
+    grouped_df = df.groupby('day_of_week')[target_columns].agg(**agg_dict).reset_index()
 
-    # error on mean of entries per weekday
-    for param in mean_columns:
-        grouped_df.loc[:,f"{param}_err"] = err / grouped_df.loc[:,f"{param}_count"].pow(1./2.)
-    grouped_df = grouped_df.reindex([3,1,5,6,4,0,2])
+    # Add error columns
+    for param in target_columns:
+        grouped_df.loc[:, f"{param}_err"] = error_value / grouped_df.loc[:, f"{param}_count"].pow(1. / 2.)
+
+    # Reorder days of week if requested
+    if reorder:
+        grouped_df = grouped_df.reindex(DOW_ORDER)
 
     return grouped_df
 
 
-def group_and_mean_sums_by_day_of_week(df, date_column, mean_columns, err):
-    """
-    Group a DataFrame by day and sum specified columns, then report mean in day of the week.
+def group_and_mean_by_day_of_week(df, date_column, mean_columns, error_value):
+    """Group a DataFrame by day of week and calculate mean of specified columns.
 
-    Parameters:
-    df (pd.DataFrame): The input DataFrame
-    date_column (str): Name of the column containing dates
-    mean_columns (list): List of column names to mean/sum
-
-    Returns:
-    pd.DataFrame: A new DataFrame grouped by day with meaned columns
-    """
-    # Ensure the date column is in datetime format
-    df.loc[:,date_column] = pd.to_datetime(df.loc[:,date_column])
-
-    functions = ['sum', 'count']
-    agg_dict = {}
-    for param in mean_columns:
-        for func in functions:
-            agg_dict[f"{param}_{func}"] = (param,func)
-
-    # Group by date (ignoring time) and sum specified columns
-    grouped_summed_by_day_df = df.groupby(df[date_column].dt.date)[mean_columns].agg(**agg_dict).reset_index()
-    # _sum and _count are totals per day (usually <10)
-
-    grouped_summed_by_day_df = add_day_of_week(grouped_summed_by_day_df, date_column)
-
-    functions = ['mean', 'std', 'count']
-    agg_dict = {}
-    for param in mean_columns:
-        for func in functions:
-            agg_dict[f"{param}_sum_{func}"] = (f"{param}_sum",func)
-        agg_dict[f"{param}_count_sum"] = (f"{param}_count","sum")
-
-    # Group by day of week and mean specified columns
-    grouped_on_sums_df = grouped_summed_by_day_df.groupby('day_of_week').agg(**agg_dict).reset_index()
-
-    # _mean _std and _count are values for same weekday (which have been summed), i.e. mean of weekday sum.
-    for param in mean_columns:
-        # error = # sum/# week * err
-        grouped_on_sums_df.loc[:,f"{param}_err"] = err * ( grouped_on_sums_df.loc[:,f"{param}_count_sum"].pow(1./2.) / grouped_on_sums_df.loc[:,f"{param}_count_sum"] )
-    grouped_on_sums_df = grouped_on_sums_df.reindex([3,1,5,6,4,0,2])
-
-    return grouped_on_sums_df
-
-
-def group_and_sum_by_day_of_week(df, date_column, sum_columns, err=1.0):
-    """
-    Group a DataFrame by day of week and sum specified columns.
-
-    Parameters:
-    df (pd.DataFrame): The input DataFrame
-    date_column (str): Name of the column containing dates
-    sum_columns (list): List of column names to sum
+    Args:
+        df (pd.DataFrame): The input DataFrame
+        date_column (str): Name of the column containing dates
+        mean_columns (list): List of column names to average
+        error_value (float): Error value for uncertainty calculation
 
     Returns:
-    pd.DataFrame: A new DataFrame grouped by day of week with summed columns
+        pd.DataFrame: A new DataFrame grouped by day of week with mean values
     """
-    # Ensure the date column is in datetime format
-    df.loc[:,date_column] = pd.to_datetime(df.loc[:,date_column])
-    day_of_week = add_day_of_week(df, date_column)
+    return group_by_day_of_week(df, date_column, mean_columns, error_value,
+                                ['mean', 'std', 'count'])
 
-    functions = ['sum', 'count']
+
+def group_and_mean_sums_by_day_of_week(df, date_column, mean_columns, error_value):
+    """Group a DataFrame by day and sum specified columns, then report mean by day of week.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame
+        date_column (str): Name of the column containing dates
+        mean_columns (list): List of column names to process
+        error_value (float): Error value for uncertainty calculation
+
+    Returns:
+        pd.DataFrame: A new DataFrame grouped by day of week with mean of daily sums
+    """
+    df = ensure_datetime(df, date_column)
+
+    # First group by date and sum
+    agg_dict = create_aggregation_dict(mean_columns, ['sum', 'count'])
+    grouped_by_day_df = df.groupby(df[date_column].dt.date)[mean_columns].agg(**agg_dict).reset_index()
+
+    # Add day of week
+    grouped_by_day_df = add_day_of_week(grouped_by_day_df, date_column)
+
+    # Prepare aggregation for day of week grouping
     agg_dict = {}
-    for param in sum_columns:
-        for func in functions:
-            agg_dict[f"{param}_{func}"] = (param,func)
+    for param in mean_columns:
+        for func in ['mean', 'std', 'count']:
+            agg_dict[f"{param}_sum_{func}"] = (f"{param}_sum", func)
+        agg_dict[f"{param}_count_sum"] = (f"{param}_count", "sum")
 
-    # Group by date (ignoring time) and sum specified columns
-    grouped_df = df.groupby(day_of_week.loc[:,'day_of_week'])[sum_columns].agg(**agg_dict).reset_index()
-    for param in sum_columns:
-        # error = err* # sum
-        grouped_df.loc[:,f"{param}_err"] = err * grouped_df.loc[:,f"{param}_count"].pow(1./2.)
+    # Group by day of week
+    grouped_df = grouped_by_day_df.groupby('day_of_week').agg(**agg_dict).reset_index()
 
-    grouped_df = grouped_df.reindex([3,1,5,6,4,0,2])
+    # Calculate errors
+    for param in mean_columns:
+        grouped_df.loc[:, f"{param}_err"] = error_value * (
+                grouped_df.loc[:, f"{param}_count_sum"].pow(1. / 2.) /
+                grouped_df.loc[:, f"{param}_count_sum"]
+        )
+
+    # Reorder days
+    grouped_df = grouped_df.reindex(DOW_ORDER)
 
     return grouped_df
+
+
+def group_and_sum_by_day_of_week(df, date_column, sum_columns, error_value=1.0):
+    """Group a DataFrame by day of week and sum specified columns.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame
+        date_column (str): Name of the column containing dates
+        sum_columns (list): List of column names to sum
+        error_value (float): Error value for uncertainty calculation
+
+    Returns:
+        pd.DataFrame: A new DataFrame grouped by day of week with summed columns
+    """
+    return group_by_day_of_week(df, date_column, sum_columns, error_value,
+                                ['sum', 'count'])
 
 
 def filter_date_range(df, date_column, start_date, end_date):
