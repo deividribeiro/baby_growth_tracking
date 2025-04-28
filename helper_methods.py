@@ -7,8 +7,8 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap
 from scipy.signal import find_peaks
 
-MORNING_START = 7
-NIGHT_START = 18
+MORNING_START = "07:00:00"
+NIGHT_START = "18:00:00"
 SLEEP_ERR = 10 * 60 # 10 mins in seconds
 BOTTLE_ERR = 15 # ml
 
@@ -291,8 +291,8 @@ def categorize_day_night(df, start_time_col, end_time_col):
     df.loc[:,end_time_col] = pd.to_datetime(df.loc[:,end_time_col])
 
     # Define night start and end times
-    night_start = datetime.time(NIGHT_START, 0)  # 7 PM
-    night_end = datetime.time(MORNING_START, 0)    # 7 AM
+    night_start = datetime.datetime.strptime(NIGHT_START, "%H:%M:%S").time()
+    night_end = datetime.datetime.strptime(MORNING_START, "%H:%M:%S").time()
 
     def categorize(row):
         start = row[start_time_col]
@@ -338,8 +338,8 @@ def categorize_day_night_start_only(df, start_time_col):
     df.loc[:,start_time_col] = pd.to_datetime(df.loc[:,start_time_col])
 
     # Define night start and end times
-    night_start = datetime.time(18, 0)  # 7 PM
-    night_end = datetime.time(7, 0)    # 7 AM
+    night_start = datetime.datetime.strptime(NIGHT_START, "%H:%M:%S").time()
+    night_end = datetime.datetime.strptime(MORNING_START, "%H:%M:%S").time()
 
     def categorize(row):
         start = row[start_time_col]
@@ -702,9 +702,15 @@ def plot_heatmap_with_date_range(df, start_date_str='2025-01-01', end_date_str='
 
     # Add vertical bands instead of horizontal
     # We need to convert the hour ranges to indices in the time array
+    hour_time_step = 4
     morning_start = 0  # 0:00
-    morning_end = 7 * 4  # 7:00 (4 steps per hour)
-    evening_start = 18 * 4  # 18:00
+    morning_start_object = datetime.datetime.strptime(MORNING_START, "%H:%M:%S").time()
+    morning_decimal_hour = morning_start_object.hour + morning_start_object.minute / 60 + morning_start_object.second / 3600
+    morning_end = morning_decimal_hour * hour_time_step
+
+    evening_start_object = datetime.datetime.strptime(NIGHT_START, "%H:%M:%S").time()
+    evening_start_decimal_hour = evening_start_object.hour + evening_start_object.minute / 60 + evening_start_object.second / 3600
+    evening_start = evening_start_decimal_hour * hour_time_step  # 18:00
     evening_end = len(time_range)  # 23:59
 
     ax.axvspan(morning_start, morning_end, facecolor='slateblue', alpha=0.2)  # 0-7 hours
@@ -733,7 +739,7 @@ def plot_heatmap_with_date_range(df, start_date_str='2025-01-01', end_date_str='
     ax.set_yticklabels(limited_date_range[tick_positions].strftime('%Y-%m-%d'))
 
     # Set x-axis ticks and labels (every hour)
-    hour_indices = np.arange(0, len(time_range), 4)
+    hour_indices = np.arange(0, len(time_range), hour_time_step)
     ax.set_xticks(hour_indices)
     ax.set_xticklabels([t.strftime('%H:%M') for t in time_range[hour_indices]], rotation=45, ha='right')
     plt.grid(True, color='gray', alpha=0.2, linestyle=':')
@@ -845,9 +851,24 @@ def plot_heatmap_with_date_range_transpose(full_df, start_date_str='2024-01-01',
     fig, ax = plt.subplots(figsize=(12, 8))
 
     # Add horizontal bands
-    ax.axhspan(0, 7 * 4, facecolor='slateblue', alpha=0.2)  # 0-7 hours (4 steps per hour)
-    ax.axhspan(7 * 4, 18 * 4, facecolor='gold', alpha=0.2)  # 7-18 hours
-    ax.axhspan(18 * 4, 24 * 4, facecolor='slateblue', alpha=0.2)  # 18-24 hours
+    # ax.axhspan(0, 7 * 4, facecolor='slateblue', alpha=0.2)  # 0-7 hours (4 steps per hour)
+    # ax.axhspan(7 * 4, 18 * 4, facecolor='gold', alpha=0.2)  # 7-18 hours
+    # ax.axhspan(18 * 4, 24 * 4, facecolor='slateblue', alpha=0.2)  # 18-24 hours
+
+    hour_time_step = 4
+    morning_start = 0  # 0:00
+    morning_start_object = datetime.datetime.strptime(MORNING_START, "%H:%M:%S").time()
+    morning_decimal_hour = morning_start_object.hour + morning_start_object.minute / 60 + morning_start_object.second / 3600
+    morning_end = morning_decimal_hour * hour_time_step
+
+    evening_start_object = datetime.datetime.strptime(NIGHT_START, "%H:%M:%S").time()
+    evening_start_decimal_hour = evening_start_object.hour + evening_start_object.minute / 60 + evening_start_object.second / 3600
+    evening_start = evening_start_decimal_hour * hour_time_step  # 18:00
+    evening_end = len(time_range)  # 23:59
+
+    ax.axhspan(morning_start, morning_end, facecolor='slateblue', alpha=0.2)  # 0-7 hours
+    ax.axhspan(morning_end, evening_start, facecolor='gold', alpha=0.2)  # 7-18 hours
+    ax.axhspan(evening_start, evening_end, facecolor='slateblue', alpha=0.2)  # 18-24 hours
 
     # Create custom colormaps
     cmap_bottle = ListedColormap(['none', 'red'])
