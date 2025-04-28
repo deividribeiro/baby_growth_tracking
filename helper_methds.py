@@ -11,6 +11,8 @@ from scipy.signal import find_peaks
 
 MORNING_START = 7
 NIGHT_START = 18
+SLEEP_ERR = 10 * 60 # 10 mins in seconds
+BOTTLE_ERR = 15 # ml
 
 
 def add_day_of_week(df, date_column):
@@ -835,3 +837,42 @@ def plot_heatmap_with_date_range_transpose(full_df, start_date_str='2024-01-01',
     # Adjust layout and display the plot
     plt.tight_layout()
     plt.show()
+
+
+def to_datetime(full_df):
+    date_fields = ['enteredDate', 'leftStart', 'leftEnd']
+    for field in date_fields:
+        full_df[field] = pd.to_datetime(full_df[field], format='%Y-%m-%dT%H:%M:%S.%fZ').dt.tz_localize(
+            'UTC').dt.tz_convert('US/Eastern')
+    return full_df
+
+
+def to_numeric(full_df):
+    num_fields = ['leftSeconds',
+                  'rightSeconds',
+                  'bottleAmount',
+                  'bottleAmountOunce',
+                  'weight',
+                  'height',
+                  'headCirc',
+                  'temperature',
+                  'weightPounds',
+                  'heightInches',
+                  'headCircInches',
+                  'temperatureFah', 'singleTimerSeconds']
+    for field in num_fields:
+        full_df[field] = pd.to_numeric(full_df[field])
+    return full_df
+
+
+def get_comments(df, min_length=1):
+    """
+    Get entries with non-empty comments.
+
+    Parameters:
+    min_length (int): Minimum length of comments to include
+
+    Returns:
+    pd.DataFrame: DataFrame with non-empty comments
+    """
+    return df[df['customComment'].str.strip().str.len() >= min_length]
