@@ -5,14 +5,31 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap
-
-# from mybaby import fig1, ax1, fig2, ax2, date_range, heatmap_data_bottle, heatmap_data_sleep, time_range
 from scipy.signal import find_peaks
 
 MORNING_START = 7
 NIGHT_START = 18
 SLEEP_ERR = 10 * 60 # 10 mins in seconds
 BOTTLE_ERR = 15 # ml
+
+
+def ensure_datetime(df, date_columns):
+    """Convert specified columns to datetime format.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame
+        date_columns (str or list): Column name(s) to convert
+
+    Returns:
+        pd.DataFrame: DataFrame with converted columns
+    """
+    if isinstance(date_columns, str):
+        date_columns = [date_columns]
+
+    for col in date_columns:
+        df.loc[:, col] = pd.to_datetime(df.loc[:, col])
+
+    return df
 
 
 def add_day_of_week(df, date_column):
@@ -28,6 +45,42 @@ def add_day_of_week(df, date_column):
     """
     df.loc[:,'day_of_week'] = pd.to_datetime(df.loc[:,date_column]).dt.day_name()
     return df
+
+
+def create_aggregation_dict(columns, functions):
+    """Create a dictionary for pandas aggregation.
+
+    Args:
+        columns (list): Column names to aggregate
+        functions (list): Aggregation functions to apply
+
+    Returns:
+        dict: Aggregation dictionary for pandas
+    """
+    agg_dict = {}
+    for param in columns:
+        for func in functions:
+            agg_dict[f"{param}_{func}"] = (param, func)
+    return agg_dict
+
+
+def add_error_columns(df, columns, error_value, count_suffix="_count"):
+    """Add error columns based on count and error value.
+
+    Args:
+        df (pd.DataFrame): DataFrame to modify
+        columns (list): Columns to calculate errors for
+        error_value (float): Base error value
+        count_suffix (str): Suffix for count columns
+
+    Returns:
+        pd.DataFrame: DataFrame with added error columns
+    """
+    for param in columns:
+        count_col = f"{param}{count_suffix}"
+        df[f"{param}_err"] = error_value * df[count_col].pow(1. / 2.)
+    return df
+
 
 
 def group_and_sum_by_day(df, date_column, sum_columns, err):
