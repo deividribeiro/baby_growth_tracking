@@ -317,7 +317,7 @@ def categorize_day_night(df, start_time_col, end_time_col):
             return 'day', start.date()
 
     # Apply the categorization
-    df.loc[:,'daytime'], df.loc[:,'daytime_Time'] = zip(*df.loc[:,start_time_col].apply(categorize))
+    df.loc[:,'daytime'], df.loc[:,'daytime_Time'] = zip(*df.loc[:,[start_time_col, end_time_col]].apply(categorize))
 
     return df
 
