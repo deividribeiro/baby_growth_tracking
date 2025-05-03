@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap
+plt.rcParams['figure.constrained_layout.use'] = True
 from scipy.signal import find_peaks
 
 MORNING_START = "07:00:00"
