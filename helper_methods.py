@@ -10,6 +10,16 @@ from scipy.signal import find_peaks
 
 MORNING_START = "07:00:00"
 NIGHT_START = "18:00:00"
+# Dates are inclusive, in format "YYYY-MM-DD"
+TIME_PERIODS = [
+    # Example: October 1 to Dec 31
+    ("2024-10-01", "2025-01-31", "21:00:00", "07:00:00"),
+    # Example: Jan 1 to Jan 31
+    ("2025-02-01", "2025-02-28", "19:00:00", "07:00:00"),
+    # Example: Feb 1 to December 31
+    ("2025-03-01", "2025-12-31", "18:30:00", "05:00:00")
+]
+
 SLEEP_ERR = 10 * 60 # 10 mins in seconds
 BOTTLE_ERR = 15 # ml
 
@@ -291,13 +301,29 @@ def categorize_day_night(df, start_time_col, end_time_col):
     df.loc[:,start_time_col] = pd.to_datetime(df.loc[:,start_time_col])
     df.loc[:,end_time_col] = pd.to_datetime(df.loc[:,end_time_col])
 
-    # Define night start and end times
-    night_start = datetime.datetime.strptime(NIGHT_START, "%H:%M:%S").time()
-    night_end = datetime.datetime.strptime(MORNING_START, "%H:%M:%S").time()
+    def get_time_thresholds(date):
+        """Get the night start and morning start times for a given date."""
+        # Convert date to YYYY-MM-DD format for comparison
+        transition_day = date.strftime('%Y-%m-%d')
+
+        for start_date, end_date, night_start, morning_start in TIME_PERIODS:
+            # Check if the date falls within this period
+            if start_date <= transition_day <= end_date:
+                return datetime.datetime.strptime(night_start, "%H:%M:%S").time(), \
+                    datetime.datetime.strptime(morning_start, "%H:%M:%S").time()
+
+        # Default values if no period matches (should not happen with proper configuration)
+        return datetime.datetime.strptime(NIGHT_START, "%H:%M:%S").time(), \
+            datetime.datetime.strptime(MORNING_START, "%H:%M:%S").time()
 
     def categorize(row):
         start = row[start_time_col]
         end = row[end_time_col]
+        start_date = start.date()
+        end_date = end.date()
+
+        # Get appropriate thresholds for this date
+        night_start, night_end = get_time_thresholds(start_date)
 
         # Check if the entry spans midnight
         spans_midnight = start.date() != end.date()
@@ -338,12 +364,33 @@ def categorize_day_night_start_only(df, start_time_col):
     # Ensure datetime format
     df.loc[:,start_time_col] = pd.to_datetime(df.loc[:,start_time_col])
 
-    # Define night start and end times
-    night_start = datetime.datetime.strptime(NIGHT_START, "%H:%M:%S").time()
-    night_end = datetime.datetime.strptime(MORNING_START, "%H:%M:%S").time()
+    # # Define night start and end times
+    # night_start = datetime.datetime.strptime(NIGHT_START, "%H:%M:%S").time()
+    # night_end = datetime.datetime.strptime(MORNING_START, "%H:%M:%S").time()
+
+    def get_time_thresholds(date):
+        """Get the night start and morning start times for a given date."""
+        # Convert date to YYYY-MM-DD format for comparison
+        transition_day = date.strftime('%Y-%m-%d')
+
+        for start_date, end_date, night_start, morning_start in TIME_PERIODS:
+            # Check if the date falls within this period
+            if start_date <= transition_day <= end_date:
+                return datetime.datetime.strptime(night_start, "%H:%M:%S").time(), \
+                    datetime.datetime.strptime(morning_start, "%H:%M:%S").time()
+
+        # Default values if no period matches (should not happen with proper configuration)
+        return datetime.datetime.strptime(NIGHT_START, "%H:%M:%S").time(), \
+            datetime.datetime.strptime(MORNING_START, "%H:%M:%S").time()
+
 
     def categorize(row):
         start = row[start_time_col]
+        start_date = start.date()
+
+        # Get appropriate thresholds for this date
+        night_start, night_end = get_time_thresholds(start_date)
+
         if night_start <= start.time() or start.time() < night_end:
             daytime = 'night'
             # If it's night and after midnight, use the same date
@@ -503,7 +550,6 @@ def make_year_heatmap(dates):
 
     # Set title and adjust layout
     plt.title('Date Occurrence Heatmap', y=1.2, pad=15)
-    plt.tight_layout()
 
     # Show the plot
     plt.show()
