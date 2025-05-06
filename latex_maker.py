@@ -403,11 +403,11 @@ def create_custom_theme(output_dir="CustomTheme"):
 
 % Frame title
 \setbeamertemplate{frametitle}{
-  \vspace*{0.5cm}
+  \vspace*{0.25cm}
   \begin{center}
     \usebeamerfont{frametitle}\insertframetitle
   \end{center}
-  \vspace*{0.5cm}
+  \vspace*{0.25cm}
 }
 
 % Items and enumerations
@@ -431,8 +431,8 @@ def create_custom_theme(output_dir="CustomTheme"):
 
 % Footer with just the page number in corner
 \setbeamertemplate{footline}{
-  \begin{beamercolorbox}[wd=\paperwidth, ht=0.4cm, dp=0.2cm, right]{}
-    \insertframenumber\hspace*{0.5cm}
+  \begin{beamercolorbox}[wd=\paperwidth, ht=0.4cm, dp=0.4cm, right]{}
+    \insertframenumber\hspace*{1cm}
   \end{beamercolorbox}
 }
 

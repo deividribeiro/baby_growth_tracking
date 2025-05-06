@@ -939,6 +939,11 @@ def plot_heatmap_with_date_range_transpose(full_df, start_date_str='2024-01-01',
     ax.set_yticklabels([t.strftime('%H:%M') for t in time_range[hour_indices]])
     plt.grid(True, color='gray', alpha=0.2, linestyle=':')
 
+    ax2 = ax.twinx()  # Create twin axis on the right side
+    ax2.set_yticks(ax.get_yticks())  # Copy the y-ticks from left axis
+    ax2.set_yticklabels(ax.get_yticklabels())  # Copy the y-tick labels
+    ax2.set_ylim(ax.get_ylim())
+
     # Set labels and title
     ax.set_xlabel('Date')
     ax.set_ylabel('Time')
@@ -952,8 +957,6 @@ def plot_heatmap_with_date_range_transpose(full_df, start_date_str='2024-01-01',
     ]
     ax.legend(handles=legend_elements, loc='upper right')
 
-    # Adjust layout and display the plot
-    plt.tight_layout()
     plt.show()
 
 
