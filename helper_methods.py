@@ -913,17 +913,63 @@ def plot_heatmap_with_date_range_transpose(full_df, start_date_str='2024-01-01',
     evening_start = evening_start_decimal_hour * hour_time_step  # 18:00
     evening_end = len(time_range)  # 23:59
 
-    ax.axhspan(morning_start, morning_end, facecolor='slateblue', alpha=0.2)  # 0-7 hours
-    ax.axhspan(morning_end, evening_start, facecolor='gold', alpha=0.2)  # 7-18 hours
-    ax.axhspan(evening_start, evening_end, facecolor='slateblue', alpha=0.2)  # 18-24 hours
+    # ax.axhspan(morning_start, morning_end, facecolor='slateblue', alpha=0.2)  # 0-7 hours
+    # ax.axhspan(morning_end, evening_start, facecolor='gold', alpha=0.2)  # 7-18 hours
+    # ax.axhspan(evening_start, evening_end, facecolor='slateblue', alpha=0.2)  # 18-24 hours
+    # Loop through each time period and apply the appropriate shading
+    for period_info in TIME_PERIODS:
+        date_start, date_end, evening_start_time, morning_start_time = period_info
+
+        # Find the column indices that correspond to the date range
+        # Convert date strings to datetime objects
+        start_date = pd.Timestamp(date_start).normalize()
+        end_date = pd.Timestamp(date_end).normalize()
+
+        # Find indices in date_range that fall within this period
+        date_mask = (date_range.normalize() >= start_date) & (date_range.normalize() <= end_date)
+        date_indices = np.where(date_mask)[0]
+
+        if len(date_indices) == 0:
+            continue  # Skip if no dates in this range
+
+        # Get the start and end column indices
+        col_start = date_indices[0]
+        col_end = date_indices[-1]
+
+        # Convert to plot coordinates (xmin and xmax are in 0-1 range)
+        total_cols = len(date_range)
+        xmin = col_start / total_cols
+        xmax = (col_end + 1) / total_cols  # +1 to include the last column
+
+        # Convert time strings to time objects and find row indices
+        morning_start_obj = datetime.datetime.strptime(morning_start_time, "%H:%M:%S").time()
+        evening_start_obj = datetime.datetime.strptime(evening_start_time, "%H:%M:%S").time()
+
+        # Find row indices for these times
+        morning_idx = time_range.searchsorted(morning_start_obj)
+        evening_idx = time_range.searchsorted(evening_start_obj)
+        evening_end_idx = len(time_range)
+
+        # Create the shaded regions for morning, day, and evening using axhspan
+        # For the night-morning period (midnight to morning_start)
+        ax.axhspan(0, morning_idx, xmin=xmin, xmax=xmax,
+                   facecolor='slateblue', alpha=0.3, zorder=0)
+
+        # For the day period (morning_start to evening_start)
+        ax.axhspan(morning_idx, evening_idx, xmin=xmin, xmax=xmax,
+                   facecolor='gold', alpha=0.3, zorder=0)
+
+        # For the night-evening period (evening_start to midnight)
+        ax.axhspan(evening_idx, evening_end_idx, xmin=xmin, xmax=xmax,
+                   facecolor='slateblue', alpha=0.3, zorder=0)
 
     # Create custom colormaps
     cmap_bottle = ListedColormap(['none', 'red'])
-    cmap_sleep = ListedColormap(['white', 'blue'])
+    cmap_sleep = ListedColormap(['none', 'blue'])
 
     # Plot both heatmaps
-    im_sleep = ax.imshow(limited_heatmap_sleep, aspect='auto', cmap=cmap_sleep, interpolation='nearest')
-    im_bottle = ax.imshow(limited_heatmap_bottle, aspect='auto', cmap=cmap_bottle, interpolation='nearest', alpha=0.8)
+    im_sleep = ax.imshow(limited_heatmap_sleep, aspect='auto', cmap=cmap_sleep, interpolation='nearest', alpha=0.7)
+    im_bottle = ax.imshow(limited_heatmap_bottle, aspect='auto', cmap=cmap_bottle, interpolation='nearest', alpha=0.7)
 
     # Set x-axis ticks and labels
     num_dates = len(limited_date_range)
@@ -957,7 +1003,7 @@ def plot_heatmap_with_date_range_transpose(full_df, start_date_str='2024-01-01',
     ]
     ax.legend(handles=legend_elements, loc='upper right')
 
-    plt.show()
+    return ax
 
 
 def to_datetime(full_df):
