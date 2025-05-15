@@ -12,12 +12,11 @@ MORNING_START = "07:00:00"
 NIGHT_START = "18:00:00"
 # Dates are inclusive, in format "YYYY-MM-DD"
 TIME_PERIODS = [
-    # Example: October 1 to Dec 31
-    ("2024-10-01", "2025-01-31", "21:00:00", "07:00:00"),
-    # Example: Jan 1 to Jan 31
+    ("2024-10-01", "2025-01-17", "21:00:00", "08:00:00"),
+    ("2025-01-18", "2025-01-31", "20:00:00", "08:00:00"),
     ("2025-02-01", "2025-02-28", "19:00:00", "07:00:00"),
-    # Example: Feb 1 to December 31
-    ("2025-03-01", "2025-12-31", "18:30:00", "05:00:00")
+    ("2025-03-01", "2025-04-22", "17:45:00", "07:00:00"),
+    ("2025-04-23", "2025-12-31", "18:15:00", "07:00:00")
 ]
 
 SLEEP_ERR = 10 * 60 # 10 mins in seconds
@@ -813,7 +812,9 @@ def plot_heatmap_with_date_range(df, start_date_str='2025-01-01', end_date_str='
 def plot_heatmap_with_date_range_transpose(full_df, start_date_str='2024-01-01', end_date_str='2025-05-31'):
     # First, get the combined date range across both DataFrames
     df_bottle = get_type_data(full_df, 'bottle')
+    df_bottle = filter_date_range(df_bottle, 'enteredDate', start_date_str, end_date_str)
     df_sleep = get_type_data(full_df, 'sleep')
+    df_sleep = filter_date_range(df_sleep, 'leftStart', start_date_str, end_date_str)
 
     # Get the combined min and max dates from both DataFrames
     min_date = min(df_bottle['enteredDate'].min().date(), df_sleep['leftStart'].min().date())
@@ -824,7 +825,7 @@ def plot_heatmap_with_date_range_transpose(full_df, start_date_str='2024-01-01',
     date_range = pd.date_range(start=min_date, end=max_date)
 
     # Create time range for y-axis (24 hours, in 15-minute intervals)
-    time_range = pd.date_range(start='00:00', end='23:59', freq='15T').time
+    time_range = pd.date_range(start='00:00', end='23:59', freq='15min').time
 
     # Create 2D arrays with the same dimensions for both heatmaps
     heatmap_data_bottle = np.zeros((len(time_range), len(date_range)))
@@ -872,51 +873,31 @@ def plot_heatmap_with_date_range_transpose(full_df, start_date_str='2024-01-01',
             if date_idx_end - date_idx_start > 1:
                 heatmap_data_sleep[:, date_idx_start + 1:date_idx_end] = 1
 
-    # Function to limit the display to a specific date range
-    # Convert string dates to datetime objects
-    start_date = pd.Timestamp(start_date_str).date()
-    end_date = pd.Timestamp(end_date_str).date()
-
-    # Find the indices for the specified date range
-    start_idx = np.where(date_range.date >= start_date)[0]
-    end_idx = np.where(date_range.date <= end_date)[0]
-
-    if len(start_idx) == 0 or len(end_idx) == 0:
-        print(f"Warning: Specified date range {start_date_str} to {end_date_str} is outside the available data range.")
-        return
-
-    start_idx = start_idx[0]
-    end_idx = end_idx[-1]
+    # # Function to limit the display to a specific date range
+    # # Convert string dates to datetime objects
+    # start_date = pd.Timestamp(start_date_str).date()
+    # end_date = pd.Timestamp(end_date_str).date()
+    #
+    # # Find the indices for the specified date range
+    # start_idx = np.where(date_range.date >= start_date)[0]
+    # end_idx = np.where(date_range.date <= end_date)[0]
+    #
+    # if len(start_idx) == 0 or len(end_idx) == 0:
+    #     print(f"Warning: Specified date range {start_date_str} to {end_date_str} is outside the available data range.")
+    #     return
+    #
+    # start_idx = start_idx[0]
+    # end_idx = end_idx[-1]
 
     # Extract the portion of the heatmap data for the specified date range
-    date_slice = slice(start_idx, end_idx + 1)
-    limited_date_range = date_range[date_slice]
-    limited_heatmap_bottle = heatmap_data_bottle[:, date_slice]
-    limited_heatmap_sleep = heatmap_data_sleep[:, date_slice]
+    # date_slice = slice(start_idx, end_idx + 1)
+    # limited_date_range = date_range[date_slice]
+    # limited_heatmap_bottle = heatmap_data_bottle[:, date_slice]
+    # limited_heatmap_sleep = heatmap_data_sleep[:, date_slice]
 
     # Create the plot
     fig, ax = plt.subplots(figsize=(12, 8))
 
-    # Add horizontal bands
-    # ax.axhspan(0, 7 * 4, facecolor='slateblue', alpha=0.2)  # 0-7 hours (4 steps per hour)
-    # ax.axhspan(7 * 4, 18 * 4, facecolor='gold', alpha=0.2)  # 7-18 hours
-    # ax.axhspan(18 * 4, 24 * 4, facecolor='slateblue', alpha=0.2)  # 18-24 hours
-
-    hour_time_step = 4
-    morning_start = 0  # 0:00
-    morning_start_object = datetime.datetime.strptime(MORNING_START, "%H:%M:%S").time()
-    morning_decimal_hour = morning_start_object.hour + morning_start_object.minute / 60 + morning_start_object.second / 3600
-    morning_end = morning_decimal_hour * hour_time_step
-
-    evening_start_object = datetime.datetime.strptime(NIGHT_START, "%H:%M:%S").time()
-    evening_start_decimal_hour = evening_start_object.hour + evening_start_object.minute / 60 + evening_start_object.second / 3600
-    evening_start = evening_start_decimal_hour * hour_time_step  # 18:00
-    evening_end = len(time_range)  # 23:59
-
-    # ax.axhspan(morning_start, morning_end, facecolor='slateblue', alpha=0.2)  # 0-7 hours
-    # ax.axhspan(morning_end, evening_start, facecolor='gold', alpha=0.2)  # 7-18 hours
-    # ax.axhspan(evening_start, evening_end, facecolor='slateblue', alpha=0.2)  # 18-24 hours
-    # Loop through each time period and apply the appropriate shading
     for period_info in TIME_PERIODS:
         date_start, date_end, evening_start_time, morning_start_time = period_info
 
@@ -968,27 +949,26 @@ def plot_heatmap_with_date_range_transpose(full_df, start_date_str='2024-01-01',
     cmap_sleep = ListedColormap(['none', 'blue'])
 
     # Plot both heatmaps
-    im_sleep = ax.imshow(limited_heatmap_sleep, aspect='auto', cmap=cmap_sleep, interpolation='nearest', alpha=0.7)
-    im_bottle = ax.imshow(limited_heatmap_bottle, aspect='auto', cmap=cmap_bottle, interpolation='nearest', alpha=0.7)
+    im_sleep = ax.imshow(heatmap_data_sleep, aspect='auto', cmap=cmap_sleep, interpolation='nearest', alpha=0.7)
+    im_bottle = ax.imshow(heatmap_data_bottle, aspect='auto', cmap=cmap_bottle, interpolation='nearest', alpha=0.7)
 
     # Set x-axis ticks and labels
-    num_dates = len(limited_date_range)
-    # Adjust tick interval based on the range length
-    tick_interval = max(1, num_dates // 10)  # Show at most ~10 date labels
+    num_dates = len(date_range)
+    tick_interval = 3  #num_dates // 25 # Use integer division to get 1/4 of the ticks
     tick_positions = np.arange(0, num_dates, tick_interval)
     ax.set_xticks(tick_positions)
-    ax.set_xticklabels(limited_date_range[tick_positions].strftime('%Y-%m-%d'), rotation=45, ha='right')
+    ax.set_xticklabels(date_range[tick_positions].strftime('%Y-%m-%d'), rotation=45, ha='right')
 
     # Set y-axis ticks and labels (every hour)
     hour_indices = np.arange(0, len(time_range), 4)
     ax.set_yticks(hour_indices)
     ax.set_yticklabels([t.strftime('%H:%M') for t in time_range[hour_indices]])
-    plt.grid(True, color='gray', alpha=0.2, linestyle=':')
 
     ax2 = ax.twinx()  # Create twin axis on the right side
     ax2.set_yticks(ax.get_yticks())  # Copy the y-ticks from left axis
     ax2.set_yticklabels(ax.get_yticklabels())  # Copy the y-tick labels
     ax2.set_ylim(ax.get_ylim())
+    plt.grid(True, color='gray', alpha=0.2, linestyle=':')
 
     # Set labels and title
     ax.set_xlabel('Date')
